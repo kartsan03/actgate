@@ -1,3 +1,3 @@
-"""ActGate: local IntentLedger for tool-action propose / approve / deny."""
+"""ActGate: local IntentLedger and MCP tool-call proxy."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
