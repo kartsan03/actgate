@@ -13,6 +13,7 @@ from actgate.core.intent import Intent, IntentError, build_intent
 from actgate.core.ledger import Ledger, LedgerError, resolve_ledger_path
 from actgate.core.verify import verify_ledger
 from actgate.core.mcp_proxy import run_proxy
+from actgate.core.mcp_rpc import RpcError
 
 
 def _eprint(msg: str) -> None:
@@ -215,7 +216,7 @@ def cmd_mcp(args: argparse.Namespace) -> int:
     path = getattr(args, "ledger", None)
     try:
         return run_proxy(root=root, upstream_cmd=list(args.upstream), ledger_path=path)
-    except Exception as exc:  # noqa: BLE001 — surface proxy failures as setup errors
+    except (RpcError, OSError, LedgerError) as exc:
         _eprint(str(exc))
         return 2
 

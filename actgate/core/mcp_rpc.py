@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import json
-import sys
-from typing import Any, BinaryIO, TextIO
+from typing import Any, BinaryIO
 
 
 class RpcError(RuntimeError):
@@ -13,7 +12,7 @@ class RpcError(RuntimeError):
 
 def write_message(stream: BinaryIO, message: dict[str, Any]) -> None:
     body = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
+    header = ("Content-Length: %d" % len(body) + "\r\n\r\n").encode("ascii")
     stream.write(header)
     stream.write(body)
     stream.flush()
@@ -48,10 +47,3 @@ def read_message(stream: BinaryIO) -> dict[str, Any] | None:
         return json.loads(body.decode("utf-8"))
     except json.JSONDecodeError as exc:
         raise RpcError(f"invalid JSON body: {exc}") from exc
-
-
-def write_text_line(stream: TextIO, text: str) -> None:
-    stream.write(text)
-    if not text.endswith("\n"):
-        stream.write("\n")
-    stream.flush()

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -156,17 +155,10 @@ class McpProxy:
                 },
             }
 
-        upstream = self._upstream_request("tools/call", params, req_id)
+        # Record execute before upstream so a crash after success cannot double-call.
         intent_obj = Intent.from_dict(proposal["intent"])
-        if "error" in upstream:
-            self.ledger.append(
-                "execute",
-                intent=intent_obj,
-                outcome="error",
-                detail=upstream.get("error"),
-            )
-            return upstream
-        self.ledger.append("execute", intent=intent_obj, outcome="ok")
+        self.ledger.append("execute", intent=intent_obj, outcome="started")
+        upstream = self._upstream_request("tools/call", params, req_id)
         return upstream
 
     def handle(self, message: dict[str, Any]) -> dict[str, Any] | None:
