@@ -12,6 +12,8 @@ from actgate import __version__
 from actgate.core.intent import Intent, IntentError, build_intent
 from actgate.core.ledger import Ledger, LedgerError, resolve_ledger_path
 from actgate.core.verify import verify_ledger
+from actgate.core.mcp_proxy import run_proxy
+from actgate.core.mcp_rpc import RpcError
 
 
 def _eprint(msg: str) -> None:
@@ -203,6 +205,21 @@ def cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+
+
+def cmd_mcp(args: argparse.Namespace) -> int:
+    """Stdio MCP proxy: gate tools/call via IntentLedger before upstream."""
+    if not args.upstream:
+        _eprint("mcp requires --upstream <cmd...>")
+        return 2
+    root = Path(args.root).resolve() if getattr(args, "root", None) else Path.cwd()
+    path = getattr(args, "ledger", None)
+    try:
+        return run_proxy(root=root, upstream_cmd=list(args.upstream), ledger_path=path)
+    except (RpcError, OSError, LedgerError) as exc:
+        _eprint(str(exc))
+        return 2
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="actgate",
@@ -254,6 +271,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_list = sub.add_parser("list", help="list intents and status")
     p_list.set_defaults(func=cmd_list)
+
+    p_mcp = sub.add_parser(
+        "mcp",
+        help="stdio MCP proxy: gate tools/call until ledger approve",
+    )
+    p_mcp.add_argument(
+        "--upstream",
+        nargs="+",
+        metavar="CMD",
+        required=True,
+        help="upstream MCP server command and args",
+    )
+    p_mcp.set_defaults(func=cmd_mcp)
 
     return parser
 

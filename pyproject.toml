@@ -1,7 +1,7 @@
 [project]
 name = "actgate"
-version = "0.1.0"
-description = "Local intent ledger and approval gate for tool actions"
+version = "0.2.0"
+description = "Local intent ledger and MCP tool-call proxy with approval gate"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"

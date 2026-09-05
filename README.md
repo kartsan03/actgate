@@ -4,13 +4,13 @@
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Local IntentLedger: propose a tool action, record approve or deny in an
-append-only hash-chained ledger, verify the chain before you trust it.
+Local IntentLedger and MCP stdio proxy: propose a tool action, approve or deny
+in an append-only hash-chained ledger, then let an identical tools/call reach
+one upstream MCP server.
 
-This is not an MCP proxy yet. This is not a SaaS. Everything runs offline
-against files on disk.
-
-dry-run and approve record decisions only; they do not execute tools.
+This is not a SaaS. The ledger path stays on disk. dry-run and approve record
+decisions only; they do not execute tools. The MCP proxy is what executes, and
+only after approve.
 
 ## Install
 
@@ -18,7 +18,7 @@ dry-run and approve record decisions only; they do not execute tools.
 pip install -e .[dev]
 ```
 
-## Quickstart
+## CLI quickstart
 
 ```
 actgate init
@@ -29,12 +29,28 @@ actgate verify
 actgate list
 ```
 
-Deny path:
+## MCP proxy
+
+Point your MCP client at ActGate instead of the upstream server:
 
 ```
-actgate deny <intent_id> --reason "too broad"
-# exits 1
+actgate init
+actgate mcp --upstream python -m some_mcp_server
 ```
+
+Flow:
+
+1. Client `tools/list` is forwarded to upstream. Only `tools/call` is gated;
+   other methods are forwarded.
+2. First `tools/call` for a tool+args writes a propose event and returns
+   `ACTGATE_PENDING intent_id=...` (upstream is not called).
+3. Human: `actgate approve <intent_id>` (or `actgate deny <intent_id>`).
+4. Identical subsequent `tools/call` (same tool and args) runs upstream once
+   and appends an `execute` event. A third call returns already-executed.
+5. Denied intents never hit upstream.
+
+Bare `verify` checks hash-chain integrity only. Set `ACTGATE_SEAL_KEY` for
+optional HMAC seals, or pass `verify --require-seal`.
 
 ## Exit codes
 
@@ -57,27 +73,11 @@ actgate deny <intent_id> --reason "too broad"
 }
 ```
 
-Provide either `args` or `args_hash` (sha256 of canonical JSON args). Optional
-`blast_tags` and `requested_mode`.
-
-## Ledger
-
-`.actgate/ledger.jsonl` is append-only. Each line has `prev_hash` / `entry_hash`
-(sha256). Bare `verify` checks chain integrity only: a rewritten but
-internally consistent chain still passes. It is not a signature check unless
-you opt in.
-
-Optional authenticity: set `ACTGATE_SEAL_KEY` when writing so entries get an
-HMAC seal. Then `verify` (with the key set) requires matching seals, or pass
-`verify --require-seal` to fail when seals are missing.
-
-Path escapes outside the ledger root are rejected (exit 2).
-
 ## What this is not
 
-- Not an MCP proxy (yet)
 - Not a hosted approval product
-- No network calls in the core path
+- Not a policy DSL
+- No network calls in the ledger core path (the MCP proxy talks to a local upstream process)
 
 ## Development
 
