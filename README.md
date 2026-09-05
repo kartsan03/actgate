@@ -40,7 +40,8 @@ actgate mcp --upstream python -m some_mcp_server
 
 Flow:
 
-1. Client `tools/list` is forwarded to upstream.
+1. Client `tools/list` is forwarded to upstream. Only `tools/call` is gated;
+   other methods are forwarded.
 2. First `tools/call` for a tool+args writes a propose event and returns
    `ACTGATE_PENDING intent_id=...` (upstream is not called).
 3. Human: `actgate approve <intent_id>` (or `actgate deny <intent_id>`).

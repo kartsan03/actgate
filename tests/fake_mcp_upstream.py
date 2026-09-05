@@ -30,6 +30,9 @@ def read_message() -> dict[str, Any] | None:
     return json.loads(body.decode("utf-8"))
 
 
+CALLS = 0
+CALLS_PATH = __import__("os").environ.get("ACTGATE_FAKE_CALLS")
+
 TOOLS = [
     {
         "name": "echo",
@@ -68,6 +71,10 @@ def main() -> int:
         elif method == "tools/list":
             write_message({"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}})
         elif method == "tools/call":
+            global CALLS
+            CALLS += 1
+            if CALLS_PATH:
+                open(CALLS_PATH, "w", encoding="utf-8").write(str(CALLS))
             name = params.get("name")
             arguments = params.get("arguments") or {}
             if name != "echo":

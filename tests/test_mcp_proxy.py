@@ -37,7 +37,9 @@ def root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-def test_tools_call_pending_then_approve_executes_once(root: Path) -> None:
+def test_tools_call_pending_then_approve_executes_once(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = root / "fake_calls.txt"
+    monkeypatch.setenv("ACTGATE_FAKE_CALLS", str(calls))
     upstream = [sys.executable, str(FAKE)]
     proc = subprocess.Popen(
         [sys.executable, "-m", "actgate", "mcp", "--upstream", *upstream],
@@ -84,6 +86,7 @@ def test_tools_call_pending_then_approve_executes_once(root: Path) -> None:
 
         actions = [e["action"] for e in Ledger.open(root=root).read_entries()]
         assert actions.count("execute") == 1
+        assert calls.read_text(encoding="utf-8") == "1"
         assert verify_ledger(Ledger.open(root=root)).ok
     finally:
         proc.terminate()
@@ -117,6 +120,47 @@ def test_unapproved_never_hits_upstream(root: Path) -> None:
         denied = _rpc(proc, "tools/call", {"name": "echo", "arguments": {"text": "x"}}, 3)
         assert denied["result"].get("isError") is True
         assert "ACTGATE_DENIED" in denied["result"]["content"][0]["text"]
+        actions = [e["action"] for e in Ledger.open(root=root).read_entries()]
+        assert "execute" not in actions
+    finally:
+        proc.terminate()
+        proc.wait(timeout=3)
+
+
+def test_approval_does_not_cover_different_args(root: Path) -> None:
+    upstream = [sys.executable, str(FAKE)]
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "actgate", "mcp", "--upstream", *upstream],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=root,
+        bufsize=0,
+    )
+    try:
+        _rpc(
+            proc,
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0"},
+            },
+            1,
+        )
+        pending = _rpc(proc, "tools/call", {"name": "echo", "arguments": {"text": "hi"}}, 2)
+        iid = pending["result"]["_actgate"]["intent_id"]
+        assert main(["approve", iid]) == 0
+
+        other = _rpc(proc, "tools/call", {"name": "echo", "arguments": {"text": "bye"}}, 3)
+        assert other["result"].get("isError") is True
+        assert "ACTGATE_PENDING" in other["result"]["content"][0]["text"]
+        assert other["result"]["_actgate"]["intent_id"] != iid
+
+        other_tool = _rpc(proc, "tools/call", {"name": "other", "arguments": {"text": "hi"}}, 4)
+        assert other_tool["result"].get("isError") is True
+        assert "ACTGATE_PENDING" in other_tool["result"]["content"][0]["text"]
+
         actions = [e["action"] for e in Ledger.open(root=root).read_entries()]
         assert "execute" not in actions
     finally:
