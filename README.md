@@ -1,6 +1,7 @@
 # ActGate
 
 [![ci](https://github.com/kartsan03/actgate/actions/workflows/ci.yml/badge.svg)](https://github.com/kartsan03/actgate/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/actgate.svg)](https://pypi.org/project/actgate/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -13,6 +14,12 @@ decisions only; they do not execute tools. The MCP proxy is what executes, and
 only after approve.
 
 ## Install
+
+```
+pip install actgate
+```
+
+Dev:
 
 ```
 pip install -e .[dev]
@@ -37,6 +44,8 @@ Point your MCP client at ActGate instead of the upstream server:
 actgate init
 actgate mcp --upstream python -m some_mcp_server
 ```
+
+Use the same `--root` (or the same working directory) for `init`, `approve`/`deny`, and `mcp`, so they share one ledger.
 
 Flow:
 
