@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 import time
 from pathlib import Path
@@ -249,6 +250,9 @@ def cmd_pending(args: argparse.Namespace) -> int:
         return 0
 
     interval = float(getattr(args, "interval", 1.0))
+    if not math.isfinite(interval) or interval <= 0:
+        _eprint("--interval must be a finite number > 0")
+        return 2
     sleep_fn: Callable[[float], None] = getattr(args, "_sleep", time.sleep)
     seen: set[str] = set()
     try:
@@ -257,8 +261,6 @@ def cmd_pending(args: argparse.Namespace) -> int:
             fresh = [r for r in rows if r["intent_id"] not in seen]
             for r in rows:
                 seen.add(r["intent_id"])
-            # Drop decided ids from seen so a re-propose of same id is impossible
-            # (intent ids are unique); keep seen as "already printed".
             if fresh:
                 print(json.dumps(fresh, indent=2), flush=True)
             sleep_fn(interval)

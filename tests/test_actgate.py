@@ -201,3 +201,22 @@ def test_pending_watch_deterministic(root: Path, capsys: pytest.CaptureFixture[s
     assert "watch.two" in out
     assert n["i"] == 2
 
+
+def test_pending_clears_after_deny(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["propose", "--tool", "t", "--args", "{}"]) == 0
+    iid = Ledger.open(root=root).read_entries()[0]["intent_id"]
+    capsys.readouterr()
+    assert main(["pending"]) == 0
+    assert len(json.loads(capsys.readouterr().out)) == 1
+    assert main(["deny", iid]) == 1
+    capsys.readouterr()
+    assert main(["pending"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+
+def test_pending_watch_rejects_invalid_interval(root: Path) -> None:
+    assert main(["pending", "--watch", "--interval", "0"]) == 2
+    assert main(["pending", "--watch", "--interval", "-1"]) == 2
+    assert main(["pending", "--watch", "--interval", "nan"]) == 2
+    assert main(["pending", "--watch", "--interval", "inf"]) == 2
+
