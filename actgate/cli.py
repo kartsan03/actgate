@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
+import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from actgate import __version__
 from actgate.core.intent import Intent, IntentError, build_intent
@@ -205,6 +207,65 @@ def cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def collect_pending(ledger: Ledger) -> list[dict[str, Any]]:
+    """Propose events with no approve/deny yet (HITL queue)."""
+    seen: dict[str, dict[str, Any]] = {}
+    for entry in ledger.read_entries():
+        iid = entry.get("intent_id")
+        if not iid:
+            continue
+        row = seen.setdefault(
+            iid,
+            {
+                "intent_id": iid,
+                "tool": None,
+                "seq": entry["seq"],
+                "ts": entry.get("ts"),
+                "intent": None,
+            },
+        )
+        if entry.get("action") == "propose":
+            intent = entry.get("intent") or {}
+            row["tool"] = intent.get("tool")
+            row["intent"] = intent
+            row["seq"] = entry["seq"]
+            row["ts"] = entry.get("ts")
+        elif entry.get("action") in ("approve", "deny"):
+            row["_decided"] = True
+    rows = [r for r in seen.values() if not r.pop("_decided", False) and r.get("intent") is not None]
+    return sorted(rows, key=lambda r: r["seq"])
+
+
+def cmd_pending(args: argparse.Namespace) -> int:
+    try:
+        ledger = _ledger_from_args(args)
+        if not ledger.exists():
+            raise LedgerError(f"ledger not found: {ledger.path}")
+    except LedgerError as exc:
+        _eprint(str(exc))
+        return 2
+
+    if not getattr(args, "watch", False):
+        print(json.dumps(collect_pending(ledger), indent=2))
+        return 0
+
+    interval = float(getattr(args, "interval", 1.0))
+    if not math.isfinite(interval) or interval <= 0:
+        _eprint("--interval must be a finite number > 0")
+        return 2
+    sleep_fn: Callable[[float], None] = getattr(args, "_sleep", time.sleep)
+    seen: set[str] = set()
+    try:
+        while True:
+            rows = collect_pending(ledger)
+            fresh = [r for r in rows if r["intent_id"] not in seen]
+            for r in rows:
+                seen.add(r["intent_id"])
+            if fresh:
+                print(json.dumps(fresh, indent=2), flush=True)
+            sleep_fn(interval)
+    except KeyboardInterrupt:
+        return 0
 
 
 def cmd_mcp(args: argparse.Namespace) -> int:
@@ -219,6 +280,7 @@ def cmd_mcp(args: argparse.Namespace) -> int:
     except (RpcError, OSError, LedgerError) as exc:
         _eprint(str(exc))
         return 2
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -271,6 +333,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_list = sub.add_parser("list", help="list intents and status")
     p_list.set_defaults(func=cmd_list)
+
+    p_pend = sub.add_parser(
+        "pending",
+        help="list undecided proposes (HITL queue); optional --watch",
+    )
+    p_pend.add_argument(
+        "--watch",
+        action="store_true",
+        help="poll and print newly pending intents until Ctrl-C",
+    )
+    p_pend.add_argument(
+        "--interval",
+        type=float,
+        default=1.0,
+        help="watch poll interval seconds (default: 1)",
+    )
+    p_pend.set_defaults(func=cmd_pending)
 
     p_mcp = sub.add_parser(
         "mcp",

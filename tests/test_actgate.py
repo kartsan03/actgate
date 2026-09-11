@@ -149,3 +149,74 @@ def test_forged_consistent_chain_verifies_without_seal(root: Path) -> None:
     assert main(["verify"]) == 0
     assert verify_ledger(ledger).ok
     assert main(["verify", "--require-seal"]) == 1
+
+def test_pending_empty(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["pending"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out == []
+
+
+def test_pending_with_propose(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["propose", "--tool", "shell.exec", "--args", '{"cmd":"ls"}']) == 0
+    capsys.readouterr()
+    assert main(["pending"]) == 0
+    rows = json.loads(capsys.readouterr().out)
+    assert len(rows) == 1
+    assert rows[0]["tool"] == "shell.exec"
+    assert rows[0]["intent_id"]
+
+
+def test_pending_clears_after_approve(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["propose", "--tool", "t", "--args", "{}"]) == 0
+    iid = Ledger.open(root=root).read_entries()[0]["intent_id"]
+    capsys.readouterr()
+    assert main(["pending"]) == 0
+    assert len(json.loads(capsys.readouterr().out)) == 1
+    assert main(["approve", iid]) == 0
+    capsys.readouterr()
+    assert main(["pending"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+
+def test_pending_watch_deterministic(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from actgate.cli import build_parser, cmd_pending
+
+    assert main(["propose", "--tool", "watch.me", "--args", '{"n":1}']) == 0
+    capsys.readouterr()
+    n = {"i": 0}
+
+    def fake_sleep(_interval: float) -> None:
+        n["i"] += 1
+        if n["i"] == 1:
+            assert main(["propose", "--tool", "watch.two", "--args", '{"n":2}']) == 0
+            return
+        raise KeyboardInterrupt
+
+    args = build_parser().parse_args(["pending", "--watch", "--interval", "0.01"])
+    args._sleep = fake_sleep
+    assert cmd_pending(args) == 0
+    out = capsys.readouterr().out
+    # two flushed JSON arrays
+    assert "watch.me" in out
+    assert "watch.two" in out
+    assert n["i"] == 2
+
+
+def test_pending_clears_after_deny(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["propose", "--tool", "t", "--args", "{}"]) == 0
+    iid = Ledger.open(root=root).read_entries()[0]["intent_id"]
+    capsys.readouterr()
+    assert main(["pending"]) == 0
+    assert len(json.loads(capsys.readouterr().out)) == 1
+    assert main(["deny", iid]) == 1
+    capsys.readouterr()
+    assert main(["pending"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+
+def test_pending_watch_rejects_invalid_interval(root: Path) -> None:
+    assert main(["pending", "--watch", "--interval", "0"]) == 2
+    assert main(["pending", "--watch", "--interval", "-1"]) == 2
+    assert main(["pending", "--watch", "--interval", "nan"]) == 2
+    assert main(["pending", "--watch", "--interval", "inf"]) == 2
+

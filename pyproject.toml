@@ -1,6 +1,6 @@
 [project]
 name = "actgate"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local intent ledger and MCP tool-call proxy with approval gate"
 readme = "README.md"
 license = "MIT"
