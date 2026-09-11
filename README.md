@@ -30,6 +30,7 @@ pip install -e .[dev]
 ```
 actgate init
 actgate propose --tool shell.exec --args '{"cmd":"ls"}' --blast-tags fs.read
+actgate pending
 actgate dry-run <intent_id>
 actgate approve <intent_id>
 actgate verify
@@ -61,11 +62,24 @@ Flow:
 Bare `verify` checks hash-chain integrity only. Set `ACTGATE_SEAL_KEY` for
 optional HMAC seals, or pass `verify --require-seal`.
 
+
+## Human loop (HITL)
+
+Typical MCP approval loop:
+
+1. Client hits `actgate mcp --upstream ...` and gets `ACTGATE_PENDING`.
+2. Human: `actgate pending` (or `actgate pending --watch`) to see undecided proposes.
+3. `actgate approve <intent_id>` or `actgate deny <intent_id>`.
+4. Client retries the same `tools/call`; proxy executes once.
+
+`pending` is the propose-without-decision queue. `--watch` polls (default 1s) and
+prints newly pending intents as JSON until Ctrl-C (clean exit 0).
+
 ## Exit codes
 
 | Code | Meaning |
 |------|---------|
-| 0 | ok (propose, approve, verify clean, show/list) |
+| 0 | ok (propose, approve, verify clean, show/list/pending) |
 | 1 | deny recorded, or verify found a broken chain / bad seal |
 | 2 | setup error (missing ledger, bad path, invalid args) |
 
