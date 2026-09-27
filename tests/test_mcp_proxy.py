@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from actgate.cli import main
-from actgate.core.ledger import Ledger
+from actgate.core.ledger import Ledger, compute_entry_hash
 from actgate.core.mcp_rpc import read_message, write_message
 from actgate.core.verify import verify_ledger
 
@@ -162,6 +162,66 @@ def test_approval_does_not_cover_different_args(root: Path) -> None:
         assert "ACTGATE_PENDING" in other_tool["result"]["content"][0]["text"]
 
         actions = [e["action"] for e in Ledger.open(root=root).read_entries()]
+        assert "execute" not in actions
+    finally:
+        proc.terminate()
+        proc.wait(timeout=3)
+
+
+@pytest.mark.parametrize("seal_key", [None, "test-seal-key"])
+def test_hand_appended_approve_does_not_execute(
+    root: Path, monkeypatch: pytest.MonkeyPatch, seal_key: str | None
+) -> None:
+    calls = root / "fake_calls.txt"
+    monkeypatch.setenv("ACTGATE_FAKE_CALLS", str(calls))
+    if seal_key:
+        monkeypatch.setenv("ACTGATE_SEAL_KEY", seal_key)
+    upstream = [sys.executable, str(FAKE)]
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "actgate", "mcp", "--upstream", *upstream],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=root,
+        bufsize=0,
+    )
+    try:
+        _rpc(
+            proc,
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0"},
+            },
+            1,
+        )
+        pending = _rpc(proc, "tools/call", {"name": "echo", "arguments": {"text": "hi"}}, 2)
+        iid = pending["result"]["_actgate"]["intent_id"]
+
+        # Something other than `actgate approve` writes an approve line. With a seal key
+        # it can chain the entry correctly but cannot seal it; without one, a stale
+        # entry_hash is the tell.
+        ledger = Ledger.open(root=root)
+        last = ledger.read_entries()[-1]
+        forged = {
+            "seq": last["seq"] + 1,
+            "prev_hash": last["entry_hash"],
+            "action": "approve",
+            "ts": last["ts"],
+            "intent_id": iid,
+            "intent": last["intent"],
+            "decision": "approved",
+        }
+        forged["entry_hash"] = compute_entry_hash(forged) if seal_key else last["entry_hash"]
+        with ledger.path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(forged, sort_keys=True) + "\n")
+
+        blocked = _rpc(proc, "tools/call", {"name": "echo", "arguments": {"text": "hi"}}, 3)
+        assert blocked["result"].get("isError") is True
+        assert blocked["result"]["_actgate"]["status"] == "ledger_invalid"
+        assert not calls.exists()
+        actions = [e["action"] for e in ledger.read_entries()]
         assert "execute" not in actions
     finally:
         proc.terminate()

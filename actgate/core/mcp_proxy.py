@@ -10,6 +10,7 @@ from typing import Any
 from actgate.core.intent import Intent, build_intent, hash_args
 from actgate.core.ledger import Ledger
 from actgate.core.mcp_rpc import RpcError, read_message, write_message
+from actgate.core.verify import verify_ledger
 
 
 def _args_match(intent: dict[str, Any], tool: str, arguments: dict[str, Any] | None) -> bool:
@@ -51,6 +52,15 @@ def _pending_result(intent_id: str) -> dict[str, Any]:
         ],
         "isError": True,
         "_actgate": {"status": "pending", "intent_id": intent_id},
+    }
+
+
+def _ledger_invalid_result(errors: list[str]) -> dict[str, Any]:
+    detail = "; ".join(errors[:3])
+    return {
+        "content": [{"type": "text", "text": f"ACTGATE_LEDGER_INVALID: {detail}"}],
+        "isError": True,
+        "_actgate": {"status": "ledger_invalid"},
     }
 
 
@@ -123,6 +133,11 @@ class McpProxy:
             }
 
         self.ledger.ensure()
+        # Decisions are read from the ledger file, so check the chain (and seals, when
+        # ACTGATE_SEAL_KEY is set) first: a hand-appended approve must not execute.
+        check = verify_ledger(self.ledger)
+        if not check.ok:
+            return {"jsonrpc": "2.0", "id": req_id, "result": _ledger_invalid_result(check.errors)}
         proposal = _find_proposal(self.ledger, tool, arguments)
         if proposal is None:
             intent = build_intent(tool=tool, args=arguments, requested_mode="execute")

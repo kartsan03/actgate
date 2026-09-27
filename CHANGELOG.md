@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- `actgate mcp` verifies the ledger before every `tools/call` decision and refuses with
+  `ACTGATE_LEDGER_INVALID` if the chain is broken, or if `ACTGATE_SEAL_KEY` is set and an
+  entry is unsealed or badly sealed. Before, the proxy trusted any approve line in the
+  file, so one appended by hand executed the tool.
+
 ## [0.3.1] - 2026-09-27
 
 ### Added
