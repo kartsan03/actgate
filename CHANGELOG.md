@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-09-27
+
+### Added
+
+- `examples/mcp`: a one-tool stdio server and `demo.sh`, which checks pending, approve, and a single execute.
+- CI runs that script on Python 3.12.
+- README gif rendered from `demo/` (Remotion). It is a drawing of the script, not a recording of it.
+
 ## [0.3.0] - 2026-09-11
 
 ### Added

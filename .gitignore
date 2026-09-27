@@ -7,3 +7,5 @@ dist/
 .pytest_cache/
 .venv/
 .actgate/
+demo/node_modules/
+demo/out/

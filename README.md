@@ -13,6 +13,18 @@ This is not a SaaS. The ledger path stays on disk. dry-run and approve record
 decisions only; they do not execute tools. The MCP proxy is what executes, and
 only after approve.
 
+![pending, then approve, then one execute](docs/demo.gif)
+
+The drawing is those three steps. The same steps against a real echo server:
+
+```
+./examples/mcp/demo.sh
+```
+
+First `tools/call` returns `ACTGATE_PENDING` and does not reach upstream.
+`actgate approve` writes the ledger and still does not. The identical call
+then runs once. CI runs that script on Python 3.12.
+
 ## Install
 
 ```

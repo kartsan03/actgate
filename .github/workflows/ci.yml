@@ -15,3 +15,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e .[dev]
       - run: pytest
+      - name: mcp demo
+        if: matrix.python-version == '3.12'
+        run: ./examples/mcp/demo.sh
